@@ -1,11 +1,42 @@
 import csv
+import json
 from pathlib import Path
 import tempfile
 import unittest
 from experimental_selection import prepare_policy, mapped_selection, require_mapped_selection
+from import_industry_mapping import import_mapping
 
 
 class ExperimentalPolicyTests(unittest.TestCase):
+    def master(self, root):
+        path=root/'master.csv'
+        path.write_text('code,sw_industry,observed_date,source\n000001,银行,2026-10-18,supplier\n000002,电子,2026-10-20,supplier\n000003,银行,2026-10-18,a\n000003,电子,2026-10-18,b\n',encoding='utf-8')
+        payload=import_mapping(path,'2026-10-20',taxonomy='sw',taxonomy_version='2021')
+        master=root/'master.json';master.write_text(json.dumps(payload,ensure_ascii=False),encoding='utf-8')
+        return master,payload
+
+    def test_master_visible_dates_conflicts_and_hashes(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);master,_=self.master(root)
+            rows=[dict(code='000001',total_score=90),dict(code='000002',total_score=80),dict(code='000003',total_score=70)]
+            _,result,audit=mapped_selection(rows,None,'2026-10-20',count=3,master=master)
+            self.assertEqual(result['selected_count'],1)
+            self.assertEqual(audit['mapped_count'],1)
+            self.assertEqual(audit['late_mapping_count'],1)
+            self.assertEqual(len(audit['master_metadata']['artifact_sha256']),64)
+            with self.assertRaises(ValueError):require_mapped_selection(audit)
+            prepared=prepare_policy({'strategy_version':'1.0.0'},root/'experiment','sw-primary',master=master)
+            self.assertEqual(prepared['industry_master'],str(master))
+            self.assertNotIn('industry_history',prepared)
+
+    def test_master_schema_and_output_isolation(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);master,payload=self.master(root)
+            with self.assertRaises(ValueError):prepare_policy({'strategy_version':'1.0.0'},root,'sw-primary',master=master)
+            for change in ({'schema_version':2},{'metadata':dict(payload['metadata'],taxonomy='sina')}):
+                broken=dict(payload,**change);master.write_text(json.dumps(broken,ensure_ascii=False),encoding='utf-8')
+                with self.assertRaises(ValueError):mapped_selection([],None,'2026-10-21',master=master)
+
     def test_default_keeps_legacy_and_experiment_refuses_production_output(self):
         config={'strategy_version':'1.0.0','weights':{'momentum':.3}}
         with tempfile.TemporaryDirectory() as temp:

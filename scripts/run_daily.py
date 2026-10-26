@@ -2332,13 +2332,14 @@ def main() -> int:
     parser.add_argument("--strict-quality", action="store_true", help="实验性质量门槛：行业分类与核心字段未通过审计时返回data_error，写入信号前停止")
     parser.add_argument("--industry-policy", choices=('legacy','sw-primary'), help="可选实验策略：按已归档申万一级行业执行上限；使用独立输出目录")
     parser.add_argument("--industry-history", type=Path, help="实验行业映射来源：已有输出目录下的daily文件夹")
+    parser.add_argument("--industry-master", type=Path, help="实验行业映射来源：经导入校验的申万2021本地JSON资料，与history二选一")
     args = parser.parse_args()
 
     paths = create_paths(Path(args.output).resolve())
     try:
         config = load_config(paths.config)
         from experimental_selection import prepare_policy
-        prepared=prepare_policy(config,paths.root,args.industry_policy,args.industry_history)
+        prepared=prepare_policy(config,paths.root,args.industry_policy,args.industry_history,args.industry_master)
         if prepared!=config:
             paths.config.write_text(json.dumps(prepared,ensure_ascii=False,indent=2),encoding='utf-8')
         config=prepared
@@ -2426,7 +2427,7 @@ def main() -> int:
         if config.get('industry_policy')=='sw-primary':
             from experimental_selection import mapped_selection, require_mapped_selection
             from report_insights import write_json
-            mapped,selected,mapping_audit=mapped_selection(scored,config['industry_history'],data_date,int(config['candidate_count']),int(config['max_per_industry']))
+            mapped,selected,mapping_audit=mapped_selection(scored,config.get('industry_history'),data_date,int(config['candidate_count']),int(config['max_per_industry']),master=config.get('industry_master'))
             report_dir.mkdir(parents=True,exist_ok=True)
             write_json(report_dir/'industry_selection.json',mapping_audit)
             require_mapped_selection(mapping_audit)

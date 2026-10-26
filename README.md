@@ -56,6 +56,7 @@ python scripts/validate_report.py --report ./quant-agent-output/daily/YYYY-MM-DD
 ## 测试
 
 ```powershell
+python -m pip install -r requirements-mapping.txt
 python -m unittest discover -s scripts -p "test_*.py" -v
 ```
 
@@ -85,7 +86,11 @@ python scripts/evaluate_research.py --signals ./quant-agent-output/state/signals
 
 ## 实验性申万一级行业约束
 
+批量取得官方行业资料：`python scripts/fetch_industry_master.py --transport curl --output ./quant-agent-output/research/industry-master`。先安装`requirements-mapping.txt`。每次保存31张原件、文件hash和实际采集时间，导入JSON可通过`--industry-master`替代历史候选资料。冲突保持未知，当前分类仅供取得日期之后的前瞻实验。[采集基准](docs/2026-10-26-官方行业表采集基准.md)记录5,275个代码和现有覆盖缺口；尚不能据此声称策略稳定盈利。
+
 旧版默认仍为1.0.0。可选 `--industry-policy sw-primary --industry-history ./quant-agent-output/daily --output ./experiment-output` 启用1.1.0实验策略，使用信号日之前已经保存的公司资料映射到申万一级行业，每行业最多2只。实验输出必须与资料来源输出分开，已有旧版信号会阻止混用。映射不能覆盖全部可评分股票或不足10只时返回 `data_error`，保留诊断，不追加实验信号。当前仅有历史候选资料，覆盖不足仍是待解决问题。
+
+批量资料可先用 `scripts/import_industry_mapping.py` 导入，再通过 `--industry-policy sw-primary --industry-master ./industry-master.json --output ./experiment-output` 使用。`--industry-master` 与 `--industry-history` 二选一。主表必须在实验输出目录之外，声明申万2021一级分类；程序核验结构、逐行分类与来源hash，仅使用信号日前一天及更早的映射。过晚记录和冲突记录保持未知，不恢复旧标签；诊断保存资料hash、截止日期及覆盖率。详见[批量资料与时点约束](docs/2026-10-26-行业资料批量导入与时点约束.md)。
 
 只回放选股结构可离线执行：
 
