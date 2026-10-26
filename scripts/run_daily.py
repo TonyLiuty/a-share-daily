@@ -2319,6 +2319,11 @@ def render_report(
 
 
 def main() -> int:
+    # Machine-readable JSON and Chinese help must use the same encoding on
+    # Windows pipes, whose default may otherwise be cp1252.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, 'reconfigure'):
+            stream.reconfigure(encoding='utf-8')
     parser = argparse.ArgumentParser(description="每日A股量化选股、技术报告和理论收益追踪")
     parser.add_argument("--output", default="quant-agent-output")
     parser.add_argument("--force", action="store_true", help="允许在周末测试或覆盖重复日期报告；不会重复追加信号")
