@@ -13,7 +13,10 @@ def audit_selection(inputs, picks, max_per_industry=2):
         # inferred from a coincidentally equal market-board name.
         hierarchy = str(row.get('sw_industry') or '')
         parts = re.split(r'\s+[—–]\s+', hierarchy, maxsplit=1)
-        record['primary_industry'] = parts[0].strip() if len(parts) == 2 else ''
+        if row.get('mapping_status')=='mapped' and row.get('primary_industry'):
+            record['primary_industry']=row['primary_industry']
+        else:
+            record['primary_industry'] = parts[0].strip() if len(parts) == 2 else ''
         selected.append(record)
     systems = {str(r.get('industry_taxonomy') or '').strip() for r in inputs}
     levels = {str(r.get('industry_level') or '').strip() for r in inputs}

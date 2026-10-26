@@ -16,6 +16,9 @@
 | scripts/selection_quality.py | 行业覆盖、分类层级、核心字段与集中度检查 |
 | scripts/quality_audit.py | 审计接入报告与可选严格模式 |
 | scripts/evaluate_research.py | 按完整信号日汇总收益、配对基准和成本敏感性 |
+| scripts/industry_mapping.py | 按已保存日期选择公司行业，保留分类来源与日期 |
+| scripts/experimental_selection.py | 隔离1.1.0实验配置、申万一级行业选择和覆盖检查 |
+| scripts/replay_industry.py | 只读历史候选的结构回放，不计算策略回测收益 |
 
 ## 修改边界
 

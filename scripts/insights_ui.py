@@ -9,6 +9,55 @@ def grid(headers, rows):
     return '<div class="table-wrap"><table><thead><tr>'+''.join('<th>'+e(str(x))+'</th>' for x in headers)+'</tr></thead><tbody>'+''.join('<tr>'+''.join('<td>'+e(str(x))+'</td>' for x in row)+'</tr>' for row in rows)+'</tbody></table></div>'
 
 
+def selection_audit_view(selection):
+    """Display recorded checks; an eligibility diagnosis never proves enforcement."""
+    if not selection:
+        return ''
+    chosen = selection.get('selected') or {}
+    inputs = selection.get('inputs') or {}
+    mapping = selection.get('mapping') or {}
+    notes = []
+    if chosen.get('unknown_share'):
+        notes.append(f"{chosen['unknown_share']:.0%}的观察股缺少选股行业标签")
+    if chosen.get('unknown_primary_share'):
+        notes.append(f"{chosen['unknown_primary_share']:.0%}的观察股缺少一级行业")
+    if chosen.get('cap_violations'):
+        notes.append('行业数量超过配置上限：'+ '、'.join(f'{k} {v}只' for k,v in chosen['cap_violations'].items()))
+    if chosen.get('primary_top_share',0) > chosen.get('max_primary_share',1):
+        notes.append(f"一级行业最高占比{chosen['primary_top_share']:.0%}，超过研究警戒值{chosen['max_primary_share']:.0%}")
+    mode = selection.get('mode')
+    mode_text = '仅诊断；未记录已执行行业约束' if mode == 'diagnostic' else '执行状态未记录'
+    if selection.get('enforcement'):
+        mode_text = '约束执行记录：' + str(selection['enforcement'])
+    elif selection.get('strict_enabled') is True:
+        mode_text = '已启用严格校验；校验结果：'+('通过' if selection.get('strict_eligible') is True else '未通过' if selection.get('strict_eligible') is False else '未记录')
+    taxonomy = mapping.get('taxonomy') or inputs.get('taxonomy')
+    level = mapping.get('level') or inputs.get('level')
+    taxonomy_label = '申万（sw）' if taxonomy == 'sw' else taxonomy
+    level_label = '一级（primary）' if level == 'primary' else level
+    label = ' / '.join(str(x) for x in (taxonomy_label,level_label) if x) or '未记录'
+    coverage = mapping.get('coverage')
+    mapped, total = mapping.get('mapped_count'), mapping.get('total_count')
+    coverage_text = f'{coverage:.1%}' if isinstance(coverage,(float,int)) else '未记录'
+    if mapped is not None and total is not None:
+        coverage_text = f'{mapped}/{total}'+(f'（{coverage_text}）' if coverage is not None else '')
+    target = selection.get('target_count',mapping.get('target_count'))
+    count = mapping.get('selected_count',chosen.get('count'))
+    shortfall = selection.get('shortfall',mapping.get('shortfall'))
+    if target is not None and count is not None:
+        notes.append(f'目标{target}只，实际{count}只'+(f'，缺少{shortfall}只' if shortfall is not None else '；候选不足数量未记录'))
+    primary = mapping.get('primary_counts') or chosen.get('primary_counts') or {}
+    fields = [
+        ['执行状态',mode_text],
+        ['策略版本',selection.get('strategy_version') or mapping.get('strategy_version') or '未记录'],
+        ['选股行业体系 / 层级',label],
+        ['行业映射覆盖率',coverage_text],
+        ['映射来源 / 版本',' / '.join(str(x) for x in (mapping.get('source'),mapping.get('version')) if x) or '未记录'],
+        ['观察池一级行业','、'.join(f'{k} {v}只' for k,v in primary.items()) or '未记录'],
+    ]
+    return '<div class="selection-audit"><p class="source-note">'+e('；'.join(notes) or '行业诊断详见记录。')+'</p><details class="support"><summary>选股行业与质量记录</summary>'+grid(['项目','记录'],fields)+'<p class="muted">'+e('预选池诊断已保存。' if selection.get('input_available') else '预选池诊断未保存。')+'</p></details></div>'
+
+
 def takeaways(context):
     market=context.get('market_returns',{})
     if len(market)==4 and all(v<0 for v in market.values()):
@@ -31,20 +80,7 @@ def render(context):
     reversals=[r for r in sectors['rows'] if r['state'] in ('由涨转跌','由跌转涨')]
     industry_text='；'.join(f"{r['name']}{r['state']}（{pct(r['previous'])} → {pct(r['ret_1d'])}）" for r in reversals[:3]) or '没有足够的同源历史行业数据确认轮动方向。'
     audit=context.get('news_audit',{})
-    selection=context.get('selection_audit',{})
-    if selection:
-        chosen=selection['selected']
-        issues=[]
-        if chosen.get('unknown_share'):
-            issues.append(f"选股时{chosen['unknown_share']:.0%}的股票缺少行业，行业上限无法核实")
-        if chosen.get('primary_top_share',0)>chosen.get('max_primary_share',1):
-            issues.append(f"单一申万一级行业占{chosen['primary_top_share']:.0%}，超过研究警戒值{chosen['max_primary_share']:.0%}")
-        if chosen.get('cap_violations'):
-            issues.append('选股行业数量超过配置上限')
-        note='；'.join(issues) or '已列出行业分布；分类体系与版本仍需补齐。'
-        quality_html='<p class="source-note">'+e(note)+'</p><details class="support"><summary>选股数据与行业约束审计</summary><p>'+e('已保存预选池诊断。' if selection.get('input_available') else '该报告未保存预选池，无法重建预选因子有效率。')+'</p><p>审计仅检查已有记录；严格模式在缺少可靠分类时停止生成新信号。</p></details>'
-    else:
-        quality_html=''
+    quality_html=selection_audit_view(context.get('selection_audit'))
     three='<div class="three-things"><h2>今日要点</h2><ol>'+''.join('<li>'+e(x)+'</li>' for x in takeaways(context))+'</ol></div>'
     change_html='<section id="changes"><div class="section-heading"><h2>较上次发生了什么</h2><span>对比 '+e(context.get('previous_date') or '暂无')+'</span></div><p>'+e('；'.join(index))+'</p><p><b>新增观察</b> '+e('、'.join(watch['added']) or '无')+'</p><p><b>退出观察</b> '+e('、'.join(watch['removed']) or '无')+f"；保留{watch['retained']}只。</p><p class=\"muted\">新增/退出只表示规则排名变化，不能等同买入/卖出。</p>"
     panel=context.get('panel')

@@ -2330,11 +2330,18 @@ def main() -> int:
     parser.add_argument("--preselect", type=int, help="测试时覆盖预选数量")
     parser.add_argument("--open-browser", action="store_true", help="仅在成功生成新报告后用默认浏览器打开HTML报告")
     parser.add_argument("--strict-quality", action="store_true", help="实验性质量门槛：行业分类与核心字段未通过审计时返回data_error，写入信号前停止")
+    parser.add_argument("--industry-policy", choices=('legacy','sw-primary'), help="可选实验策略：按已归档申万一级行业执行上限；使用独立输出目录")
+    parser.add_argument("--industry-history", type=Path, help="实验行业映射来源：已有输出目录下的daily文件夹")
     args = parser.parse_args()
 
     paths = create_paths(Path(args.output).resolve())
     try:
         config = load_config(paths.config)
+        from experimental_selection import prepare_policy
+        prepared=prepare_policy(config,paths.root,args.industry_policy,args.industry_history)
+        if prepared!=config:
+            paths.config.write_text(json.dumps(prepared,ensure_ascii=False,indent=2),encoding='utf-8')
+        config=prepared
         if args.preselect:
             config["preselect_count"] = max(args.preselect, int(config["candidate_count"]))
 
@@ -2412,7 +2419,20 @@ def main() -> int:
 
         log("[3/7] 计算多因子分数与行业分散")
         scored = score_features(features, snapshot, config)
-        picks = diversify(scored, int(config["candidate_count"]), int(config["max_per_industry"]))
+        report_dir.mkdir(parents=True,exist_ok=True)
+        preselected.to_csv(report_dir/'preselected_snapshot.csv',index=False,encoding='utf-8-sig')
+        scored.to_csv(report_dir/'scored_snapshot.csv',index=False,encoding='utf-8-sig')
+        mapping_audit=None
+        if config.get('industry_policy')=='sw-primary':
+            from experimental_selection import mapped_selection, require_mapped_selection
+            from report_insights import write_json
+            mapped,selected,mapping_audit=mapped_selection(scored,config['industry_history'],data_date,int(config['candidate_count']),int(config['max_per_industry']))
+            report_dir.mkdir(parents=True,exist_ok=True)
+            write_json(report_dir/'industry_selection.json',mapping_audit)
+            require_mapped_selection(mapping_audit)
+            picks=pd.DataFrame(selected['selected'])
+        else:
+            picks = diversify(scored, int(config["candidate_count"]), int(config["max_per_industry"]))
         if picks.empty:
             raise RuntimeError("未生成最终候选")
 
@@ -2421,7 +2441,14 @@ def main() -> int:
         picks = picks.merge(fundamentals, on="code", how="left")
         from quality_audit import audit_selection, enforce_quality
         from report_insights import write_json
-        selection_audit = audit_selection(preselected, picks, int(config['max_per_industry']))
+        audit_inputs=pd.DataFrame(mapped) if mapping_audit is not None else preselected
+        selection_audit = audit_selection(audit_inputs, picks, int(config['max_per_industry']))
+        if mapping_audit is not None:
+            selection_audit['input_scope']='scored cohort with as-of industry mapping'
+        selection_audit['strategy_version']=config['strategy_version']
+        selection_audit['strict_enabled']=args.strict_quality
+        if mapping_audit is not None:
+            selection_audit.update(mapping=mapping_audit,enforcement='sw-primary selection applied',mode='enforced')
         report_dir.mkdir(parents=True, exist_ok=True)
         write_json(report_dir / 'selection_quality.json', selection_audit)
         if args.strict_quality:

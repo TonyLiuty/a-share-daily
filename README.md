@@ -83,6 +83,18 @@ python scripts/evaluate_research.py --signals ./quant-agent-output/state/signals
 
 按1/5/20日分别报告完整信号日、成熟观测和配对超额。一个信号日只有CSV中全部股票收益成熟才参与组合均值；额外往返成本5/10个基点单独列出。多日重叠窗口不复利为净值，结果不用于自动调参。当前验收记录见 [迭代基准](docs/2026-10-26-迭代基准.md)。
 
+## 实验性申万一级行业约束
+
+旧版默认仍为1.0.0。可选 `--industry-policy sw-primary --industry-history ./quant-agent-output/daily --output ./experiment-output` 启用1.1.0实验策略，使用信号日之前已经保存的公司资料映射到申万一级行业，每行业最多2只。实验输出必须与资料来源输出分开，已有旧版信号会阻止混用。映射不能覆盖全部可评分股票或不足10只时返回 `data_error`，保留诊断，不追加实验信号。当前仅有历史候选资料，覆盖不足仍是待解决问题。
+
+只回放选股结构可离线执行：
+
+```powershell
+python scripts/replay_industry.py --daily-dir ./quant-agent-output/daily --date 2026-10-12 --output ./quant-agent-output/research/industry-replay.json
+```
+
+旧报告只有最终候选得分，这个回放不代表完整140只预选池的重新选股，也不计算新策略收益。以后生成时保存 `preselected_snapshot.csv` 和 `scored_snapshot.csv`，用于后续复现。实验条件与回放结果见 [行业映射实验](docs/2026-10-26-行业映射实验.md)。
+
 ## 结构与限制
 
 见 [架构说明](docs/ARCHITECTURE.md)、[数据与研究口径](docs/DATA_POLICY.md)、[多 Agent 迭代计划](docs/ITERATION_PLAN.md)、[策略审计](docs/STRATEGY_AUDIT.md) 和 [贡献说明](CONTRIBUTING.md)。当前公开发布准备版从原本机运行脚本整理而来；已有定时任务仍使用原安装目录，本仓库不会自动改写它。
