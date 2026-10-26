@@ -4,7 +4,8 @@ from evaluate_research import evaluate
 
 
 def row(date, code, ret, benchmark=.01):
-    item = dict(signal_date=date, code=code)
+    # The core numerical fixtures use canonical CSV security codes.
+    item = dict(signal_date=date, code=code.zfill(6))
     for horizon in (1, 5, 20):
         item[f'ret_{horizon}d'] = ret
         item[f'benchmark_ret_{horizon}d'] = benchmark
@@ -52,6 +53,37 @@ class ResearchEvaluationTests(unittest.TestCase):
     def test_duplicate_records_rejected(self):
         with self.assertRaises(ValueError):
             evaluate([row('2026-01-01', '1', .1), row('2026-01-01', '000001', .1)])
+
+    def test_mixed_versions_on_different_dates_rejected(self):
+        first=dict(row('2026-01-01','1',.1),strategy_version='1.0.0')
+        second=dict(row('2026-01-02','2',.2),strategy_version='1.1.0')
+        with self.assertRaisesRegex(ValueError,'strategy_version'):
+            evaluate([first,second])
+        second.pop('strategy_version')
+        with self.assertRaisesRegex(ValueError,'strategy_version'):
+            evaluate([first,second])
+
+    def test_single_or_unknown_version_is_identified(self):
+        fixture=row('2026-01-01','1',.1)
+        unknown=evaluate([fixture])
+        self.assertIsNone(unknown['strategy_version'])
+        self.assertEqual(unknown['strategy_version_status'],'unknown')
+        declared=evaluate([dict(fixture,strategy_version='1.0.0')])
+        self.assertEqual(declared['strategy_version'],'1.0.0')
+        self.assertEqual(unknown['horizons'],declared['horizons'])
+
+    def test_dates_require_exact_iso_and_valid_calendar(self):
+        for value in ('2026-1-01','20260101','2026-02-30','2026-01-01T00:00:00',' 2026-01-01','2026-01-01 ',None,20260101):
+            with self.subTest(value=value),self.assertRaisesRegex(ValueError,'signal_date'):
+                evaluate([dict(row('2026-01-01','1',.1),signal_date=value)])
+        self.assertEqual(evaluate([row('2024-02-29','1',.1)])['signal_dates_n'],1)
+
+    def test_codes_are_six_ascii_digits_without_repair(self):
+        for value in ('1','00001','0000001','00001A','０００００１',' 000001','000001 ',None,1):
+            with self.subTest(value=value),self.assertRaisesRegex(ValueError,'code'):
+                evaluate([dict(row('2026-01-01','1',.1),code=value)])
+        result=evaluate([row('2026-01-01','000001',.1),row('2026-01-01','600000',.2)])
+        self.assertEqual(result['independent_stocks_n'],2)
 
 
 if __name__ == '__main__':

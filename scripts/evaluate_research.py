@@ -7,7 +7,9 @@ import argparse
 import csv
 import json
 import math
+import re
 from collections import Counter, defaultdict
+from datetime import date as calendar_date
 from pathlib import Path
 
 
@@ -31,16 +33,34 @@ def evaluate(rows):
     Completeness is relative to the CSV; absent original selections cannot be inferred.
     """
     rows = list(rows)
-    if any(not str(row.get('signal_date') or '').strip() or not str(row.get('code') or '').strip() for row in rows):
-        raise ValueError('every signal requires signal_date and code')
-    counts = Counter((str(row['signal_date']), str(row['code']).zfill(6)) for row in rows)
+    versions = set()
+    for position, row in enumerate(rows, 1):
+        day, code = row.get('signal_date'), row.get('code')
+        if not isinstance(day,str) or not re.fullmatch(r'[0-9]{4}-[0-9]{2}-[0-9]{2}',day):
+            raise ValueError(f'record {position}: signal_date must use YYYY-MM-DD')
+        try:
+            calendar_date.fromisoformat(day)
+        except ValueError as error:
+            raise ValueError(f'record {position}: signal_date is not a valid calendar date') from error
+        if not isinstance(code,str) or not re.fullmatch(r'[0-9]{6}',code):
+            raise ValueError(f'record {position}: code must contain exactly six ASCII digits')
+        version = row.get('strategy_version')
+        if version is not None and not isinstance(version,str):
+            raise ValueError(f'record {position}: strategy_version must be text')
+        versions.add(version.strip() if version and version.strip() else None)
+    if len(versions)>1:
+        raise ValueError('mixed or partially missing strategy_version records; partition versions before evaluation')
+    strategy_version = next(iter(versions),None)
+    counts = Counter((row['signal_date'], row['code']) for row in rows)
     if any(count > 1 for count in counts.values()):
         raise ValueError('duplicate signal_date/code records; partition strategy versions before evaluation')
     groups = defaultdict(list)
     for row in rows:
         groups[str(row['signal_date'])].append(row)
-    unique_stocks = len({str(row['code']).zfill(6) for row in rows})
+    unique_stocks = len({row['code'] for row in rows})
     result = {'schema_version': 1, 'return_unit': 'decimal',
+              'strategy_version': strategy_version,
+              'strategy_version_status': 'declared' if strategy_version is not None else 'unknown',
               'method': 'equal-weight complete signal-date cohorts; arithmetic means; no compounding',
               'completeness_scope': 'all records present in the input CSV, not unrecorded selections',
               'all_n': len(rows), 'signal_dates_n': len(groups), 'independent_stocks_n': unique_stocks,
