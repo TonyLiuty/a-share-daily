@@ -116,6 +116,7 @@ def mapped_selection(rows, history, signal_date, count=10, cap=2, master=None):
     result=select_by_primary(mapped,count,cap)
     known=sum(row.get('mapping_status')=='mapped' for row in mapped)
     audit={'taxonomy':'sw','level':'primary','version':'asof-v1',
+           'taxonomy_version':master_meta.get('taxonomy_version') if master_meta else None,
            'source':'imported_local_csv' if master else 'archived_company_profiles','cutoff':cutoff,'strategy_version':VERSION,
            'mapped_count':known,'total_count':len(mapped),'coverage':known/len(mapped) if mapped else 0,
            'target_count':count,'selected_count':result['selected_count'],'shortfall':result['shortfall'],

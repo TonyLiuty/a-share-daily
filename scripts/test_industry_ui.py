@@ -6,6 +6,14 @@ from insights_ui import selection_audit_view
 
 
 class IndustryViewTests(unittest.TestCase):
+    def test_unsaved_inputs_are_not_displayed_as_empty_or_zero_coverage(self):
+        page=selection_audit_view({'input_available':False,'inputs':{
+            'reasons':['empty_universe','insufficient_core_field:pe'],
+            'factors':{'pe':{'valid_count':0,'count':0,'coverage':0}}}})
+        self.assertIn('原始预选池未归档',page)
+        self.assertNotIn('预选池为空',page)
+        self.assertNotIn('有效0/0条',page)
+
     def test_legacy_diagnostic_does_not_claim_enforcement(self):
         page = selection_audit_view({'mode':'diagnostic','strict_eligible':True,'selected':{'count':2}})
         self.assertIn('仅诊断；未记录已执行行业约束',page)
@@ -18,14 +26,16 @@ class IndustryViewTests(unittest.TestCase):
             'mapping':{'taxonomy':'申万','level':'一级','source':'公司资料','version':'2021','mapped_count':100,'total_count':140,'coverage':100/140}})
         self.assertIn('100/140（71.4%）',page)
         self.assertIn('目标10只，实际7只，缺少3只',page)
-        self.assertIn('申万 / 一级',page)
+        self.assertIn('<td>选股行业分类体系</td><td>申万</td>',page)
+        self.assertIn('<td>选股行业分类层级</td><td>一级</td>',page)
         self.assertIn('银行 2只',page)
         self.assertIn('2.0',page)
 
     def test_asof_mapping_schema_and_unknown_shortfall(self):
         page = selection_audit_view({'mode':'diagnostic','mapping':{'taxonomy':'sw','level':'primary',
             'strategy_version':'1.1.0','target_count':10,'selected_count':7,'primary_counts':{'银行':2}}})
-        self.assertIn('申万（sw） / 一级（primary）',page)
+        self.assertIn('<td>选股行业分类体系</td><td>申万（sw）</td>',page)
+        self.assertIn('<td>选股行业分类层级</td><td>一级（primary）</td>',page)
         self.assertIn('候选不足数量未记录',page)
         self.assertNotIn('缺少3只',page)
         self.assertIn('1.1.0',page)
@@ -33,6 +43,31 @@ class IndustryViewTests(unittest.TestCase):
     def test_empty_audit_is_optional(self):
         self.assertEqual(selection_audit_view(None),'')
         self.assertEqual(selection_audit_view({}),'')
+
+    def test_quality_reasons_include_field_and_recorded_coverage(self):
+        page=selection_audit_view({'mode':'diagnostic','inputs':{
+            'reasons':['insufficient_core_field:pe','insufficient_industry_coverage'],
+            'factors':{'pe':{'valid_count':80,'count':100,'coverage':.8}},
+            'thresholds':{'core':.95,'industry':1},'industry_coverage':.9},
+            'selected':{'reasons':['unknown_primary_industry']}})
+        self.assertIn('市盈率PE（pe）有效数据覆盖率未达门槛，有效80/100条（80.0%），要求95.0%',page)
+        self.assertIn('预选池行业标签覆盖率未达门槛，当前90.0%，要求100.0%',page)
+        self.assertIn('观察股缺少一级行业标签',page)
+        self.assertNotIn('insufficient_core_field',page)
+
+    def test_classification_version_is_not_mapping_method_version(self):
+        page=selection_audit_view({'inputs':{'taxonomy':'sw','level':'primary','taxonomy_version':'2021'},'mapping':{'version':'asof-v1'}})
+        self.assertIn('<td>选股行业分类版本</td><td>2021</td>',page)
+        self.assertIn('<td>映射方法版本</td><td>asof-v1</td>',page)
+        missing=selection_audit_view({'mapping':{'version':'asof-v1'}})
+        self.assertIn('<td>选股行业分类版本</td><td>未记录</td>',missing)
+
+    def test_strict_pass_is_not_enforcement_and_unknown_reason_kept(self):
+        page=selection_audit_view({'mode':'diagnostic','strict_enabled':True,'strict_eligible':True,
+            'inputs':{'reasons':['new_reason:<unsafe>']}})
+        self.assertIn('仅诊断；未记录已执行行业约束',page)
+        self.assertIn('<td>严格质量校验</td><td>已启用；通过</td>',page)
+        self.assertIn('待解释的质量原因：new_reason:&lt;unsafe&gt;',page)
 
     def test_equal_names_do_not_join_different_classifications(self):
         picks = [['排名', '代码', '名称', '行业', '分数'], ['2', '000001', '测试银行', '银行', '81']]

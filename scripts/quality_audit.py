@@ -20,9 +20,11 @@ def audit_selection(inputs, picks, max_per_industry=2):
         selected.append(record)
     systems = {str(r.get('industry_taxonomy') or '').strip() for r in inputs}
     levels = {str(r.get('industry_level') or '').strip() for r in inputs}
+    versions = {str(r.get('taxonomy_version') or '').strip() for r in inputs}
     taxonomy = next(iter(systems)) if len(systems) == 1 and '' not in systems else None
     level = next(iter(levels)) if len(levels) == 1 and '' not in levels else None
-    input_check = assess_selection_inputs(inputs, taxonomy=taxonomy, level=level)
+    version = next(iter(versions)) if len(versions) == 1 and '' not in versions else None
+    input_check = assess_selection_inputs(inputs, taxonomy=taxonomy, level=level, taxonomy_version=version)
     selected_check = assess_selected_industries(selected, max_per_industry=max_per_industry)
     return {'schema_version': 1, 'mode': 'diagnostic',
             'input_scope': 'preselected cohort, not the complete market',

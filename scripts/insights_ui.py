@@ -9,6 +9,43 @@ def grid(headers, rows):
     return '<div class="table-wrap"><table><thead><tr>'+''.join('<th>'+e(str(x))+'</th>' for x in headers)+'</tr></thead><tbody>'+''.join('<tr>'+''.join('<td>'+e(str(x))+'</td>' for x in row)+'</tr>' for row in rows)+'</tbody></table></div>'
 
 
+def quality_reason(reason, check):
+    """Translate recorded causes; never infer a missing statistic or rule."""
+    labels = {
+        'empty_universe':'预选池为空', 'empty_selection':'观察池为空',
+        'insufficient_industry_coverage':'预选池行业标签覆盖率未达门槛',
+        'unknown_industry_taxonomy':'行业分类体系未记录',
+        'mixed_industry_taxonomy':'记录中混有不一致的行业分类体系',
+        'unknown_industry_level':'行业分类层级未记录',
+        'mixed_industry_level':'记录中混有不一致的行业分类层级',
+        'unknown_industry_version':'行业分类版本未记录',
+        'unknown_industry_taxonomy_version':'行业分类版本未记录',
+        'mixed_industry_version':'记录中混有不一致的行业分类版本',
+        'mixed_industry_taxonomy_version':'记录中混有不一致的行业分类版本',
+        'unknown_selected_industry':'观察股缺少选股行业标签',
+        'unknown_primary_industry':'观察股缺少一级行业标签',
+        'industry_cap_exceeded':'观察股数量超过同行业上限',
+        'primary_concentration_exceeded':'一级行业占比超过研究警戒值',
+    }
+    if reason.startswith('insufficient_core_field:'):
+        field=reason.partition(':')[2]
+        names={'amount':'成交额','return_60d_snapshot':'行情快照60日涨幅','turnover_pct':'换手率','pe':'市盈率PE','change_pct':'当日涨跌幅'}
+        text=f"{names.get(field,field)}（{field}）有效数据覆盖率未达门槛"
+        details=(check.get('factors') or {}).get(field,{})
+        count,total=details.get('valid_count'),details.get('count')
+        if count is not None and total is not None:text+=f'，有效{count}/{total}条'
+        if details.get('coverage') is not None:text+=f"（{details['coverage']:.1%}）"
+        threshold=(check.get('thresholds') or {}).get('core')
+        if threshold is not None:text+=f'，要求{threshold:.1%}'
+        return text
+    text=labels.get(reason,'待解释的质量原因：'+str(reason))
+    if reason=='insufficient_industry_coverage':
+        if check.get('industry_coverage') is not None:text+=f"，当前{check['industry_coverage']:.1%}"
+        threshold=(check.get('thresholds') or {}).get('industry')
+        if threshold is not None:text+=f'，要求{threshold:.1%}'
+    return text
+
+
 def selection_audit_view(selection):
     """Display recorded checks; an eligibility diagnosis never proves enforcement."""
     if not selection:
@@ -29,13 +66,11 @@ def selection_audit_view(selection):
     mode_text = '仅诊断；未记录已执行行业约束' if mode == 'diagnostic' else '执行状态未记录'
     if selection.get('enforcement'):
         mode_text = '约束执行记录：' + str(selection['enforcement'])
-    elif selection.get('strict_enabled') is True:
-        mode_text = '已启用严格校验；校验结果：'+('通过' if selection.get('strict_eligible') is True else '未通过' if selection.get('strict_eligible') is False else '未记录')
+    strict_text = '已启用；'+('通过' if selection.get('strict_eligible') is True else '未通过' if selection.get('strict_eligible') is False else '结果未记录') if selection.get('strict_enabled') is True else '未启用' if selection.get('strict_enabled') is False else '启用状态未记录'
     taxonomy = mapping.get('taxonomy') or inputs.get('taxonomy')
     level = mapping.get('level') or inputs.get('level')
     taxonomy_label = '申万（sw）' if taxonomy == 'sw' else taxonomy
     level_label = '一级（primary）' if level == 'primary' else level
-    label = ' / '.join(str(x) for x in (taxonomy_label,level_label) if x) or '未记录'
     coverage = mapping.get('coverage')
     mapped, total = mapping.get('mapped_count'), mapping.get('total_count')
     coverage_text = f'{coverage:.1%}' if isinstance(coverage,(float,int)) else '未记录'
@@ -49,13 +84,22 @@ def selection_audit_view(selection):
     primary = mapping.get('primary_counts') or chosen.get('primary_counts') or {}
     fields = [
         ['执行状态',mode_text],
+        ['严格质量校验',strict_text],
         ['策略版本',selection.get('strategy_version') or mapping.get('strategy_version') or '未记录'],
-        ['选股行业体系 / 层级',label],
+        ['选股行业分类体系',taxonomy_label or '未记录'],
+        ['选股行业分类层级',level_label or '未记录'],
+        ['选股行业分类版本',inputs.get('taxonomy_version') or mapping.get('taxonomy_version') or (mapping.get('master_metadata') or {}).get('taxonomy_version') or '未记录'],
         ['行业映射覆盖率',coverage_text],
-        ['映射来源 / 版本',' / '.join(str(x) for x in (mapping.get('source'),mapping.get('version')) if x) or '未记录'],
+        ['映射来源',mapping.get('source') or '未记录'],
+        ['映射方法版本',mapping.get('version') or '未记录'],
         ['观察池一级行业','、'.join(f'{k} {v}只' for k,v in primary.items()) or '未记录'],
     ]
-    return '<div class="selection-audit"><p class="source-note">'+e('；'.join(notes) or '行业诊断详见记录。')+'</p><details class="support"><summary>选股行业与质量记录</summary>'+grid(['项目','记录'],fields)+'<p class="muted">'+e('预选池诊断已保存。' if selection.get('input_available') else '预选池诊断未保存。')+'</p></details></div>'
+    checks=(('观察池',chosen),) if selection.get('input_available') is False else (('预选池',inputs),('观察池',chosen))
+    reasons=[[scope,quality_reason(str(reason),check)] for scope,check in checks for reason in check.get('reasons',[])]
+    if selection.get('input_available') is False:
+        reasons.insert(0,['预选池','原始预选池未归档，无法复核字段覆盖率与行业分类版本'])
+    reason_table=grid(['涉及范围','质量问题'],reasons) if reasons else ''
+    return '<div class="selection-audit"><p class="source-note">'+e('；'.join(notes) or '行业诊断详见记录。')+'</p><details class="support"><summary>选股行业与质量记录</summary>'+grid(['项目','记录'],fields)+reason_table+'<p class="muted">'+e('预选池诊断已保存。' if selection.get('input_available') else '预选池诊断未保存。')+'</p></details></div>'
 
 
 def takeaways(context):

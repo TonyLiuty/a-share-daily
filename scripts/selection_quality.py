@@ -33,7 +33,7 @@ def _result(reasons, **details):
             'allowed': not reasons, 'reasons': reasons, **details}
 
 
-def assess_selection_inputs(rows, *, taxonomy=None, level=None,
+def assess_selection_inputs(rows, *, taxonomy=None, level=None, taxonomy_version=None,
                             industry_field='industry', min_industry_coverage=1.0,
                             min_core_coverage=0.95):
     """Assess the *filtered preselection universe*, before ranking or diversification.
@@ -56,6 +56,11 @@ def assess_selection_inputs(rows, *, taxonomy=None, level=None,
         reasons.append('insufficient_industry_coverage')
     systems = {_label(r.get('industry_taxonomy')) or _label(taxonomy) for r in records}
     levels = {_label(r.get('industry_level')) or _label(level) for r in records}
+    versions = {_label(r.get('taxonomy_version')) for r in records}
+    if not _label(taxonomy_version) or '' in versions:
+        reasons.append('unknown_industry_taxonomy_version')
+    if len(versions - {''}) > 1 or (versions - {''} and _label(taxonomy_version) and _label(taxonomy_version) not in versions):
+        reasons.append('mixed_industry_taxonomy_version')
     if not _label(taxonomy) or '' in systems:
         reasons.append('unknown_industry_taxonomy')
     if len(systems) > 1 or (systems and _label(taxonomy) not in systems):
@@ -73,6 +78,7 @@ def assess_selection_inputs(rows, *, taxonomy=None, level=None,
             reasons.append('insufficient_core_field:' + field)
     return _result(reasons, count=n, classified_count=classified,
                    industry_coverage=coverage, taxonomy=taxonomy, level=level,
+                   taxonomy_version=taxonomy_version, observed_taxonomy_versions=sorted(versions),
                    thresholds={'industry': min_industry_coverage, 'core': min_core_coverage},
                    factors=factors)
 

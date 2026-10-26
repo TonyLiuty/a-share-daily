@@ -11,11 +11,24 @@ class QualityIntegrationTests(unittest.TestCase):
 
     def test_explicit_consistent_mapping_can_pass(self):
         rows=[{'industry':f'行业{x}','industry_taxonomy':'test-taxonomy-v1','industry_level':'level-1',
-               'sw_industry':f'一级{x} — 细分','amount':1e9,'return_60d_snapshot':1,
+               'taxonomy_version':'2021','sw_industry':f'一级{x} — 细分','amount':1e9,'return_60d_snapshot':1,
                'turnover_pct':2,'pe':10,'change_pct':1} for x in range(5)]
         audit=audit_selection(rows,rows)
         self.assertTrue(audit['strict_eligible'])
         enforce_quality(audit)
+
+    def test_version_is_required_not_inferred_from_taxonomy_name(self):
+        rows=[{'industry':f'行业{x}','industry_taxonomy':'申万2021','industry_level':'一级',
+               'sw_industry':f'一级{x} — 细分','amount':1e9,'return_60d_snapshot':1,
+               'turnover_pct':2,'pe':10,'change_pct':1} for x in range(5)]
+        audit=audit_selection(rows,rows)
+        self.assertFalse(audit['strict_eligible'])
+        self.assertIn('unknown_industry_taxonomy_version',audit['inputs']['reasons'])
+        for row in rows:row['taxonomy_version']='2021'
+        rows[0]['taxonomy_version']='2014'
+        audit=audit_selection(rows,rows)
+        self.assertIn('mixed_industry_taxonomy_version',audit['inputs']['reasons'])
+        self.assertEqual(audit['inputs']['observed_taxonomy_versions'],['2014','2021'])
 
     def test_old_report_does_not_invent_input_coverage(self):
         audit=audit_selection([], [{'industry':'银行','sw_industry':'银行 — 国有银行'}])

@@ -6,13 +6,23 @@ from selection_quality import assess_selection_inputs, assess_selected_industrie
 
 def universe():
     return [dict(code=str(i), industry='细分' + str(i // 2), primary_industry='一级' + str(i // 2),
-                 amount=1e9, return_60d_snapshot=5, turnover_pct=3, pe=10, change_pct=1)
+                 amount=1e9, return_60d_snapshot=5, turnover_pct=3, pe=10, change_pct=1,taxonomy_version='2021')
             for i in range(10)]
 
 
 class SelectionQualityTests(unittest.TestCase):
     def assess(self, rows, **kwargs):
-        return assess_selection_inputs(rows, taxonomy='申万2021', level='二级', **kwargs)
+        return assess_selection_inputs(rows, taxonomy='申万', level='二级', taxonomy_version='2021', **kwargs)
+
+    def test_missing_mixed_and_mismatched_version_rejected(self):
+        rows=universe();rows[0].pop('taxonomy_version')
+        self.assertIn('unknown_industry_taxonomy_version',self.assess(rows)['reasons'])
+        rows=universe();rows[0]['taxonomy_version']='2014'
+        self.assertIn('mixed_industry_taxonomy_version',self.assess(rows)['reasons'])
+        rows=universe()
+        result=assess_selection_inputs(rows,taxonomy='申万',level='二级',taxonomy_version='2014')
+        self.assertFalse(result['allowed'])
+        self.assertIn('mixed_industry_taxonomy_version',result['reasons'])
 
     def test_classified_balanced_passes_and_preserves_input(self):
         rows = universe()

@@ -23,6 +23,8 @@ class ExperimentalPolicyTests(unittest.TestCase):
             self.assertEqual(result['selected_count'],1)
             self.assertEqual(audit['mapped_count'],1)
             self.assertEqual(audit['late_mapping_count'],1)
+            self.assertEqual(audit['taxonomy_version'],'2021')
+            self.assertEqual(audit['version'],'asof-v1')
             self.assertEqual(len(audit['master_metadata']['artifact_sha256']),64)
             with self.assertRaises(ValueError):require_mapped_selection(audit)
             prepared=prepare_policy({'strategy_version':'1.0.0'},root/'experiment','sw-primary',master=master)
