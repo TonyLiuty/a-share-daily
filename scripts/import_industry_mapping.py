@@ -15,7 +15,7 @@ REQUIRED = {'code', 'sw_industry', 'observed_date', 'source'}
 
 def iso_day(value):
     text = str(value).strip()
-    if not re.fullmatch(r'\d{4}-\d{2}-\d{2}', text):
+    if not re.fullmatch(r'[0-9]{4}-[0-9]{2}-[0-9]{2}', text):
         raise ValueError('dates must use YYYY-MM-DD')
     date.fromisoformat(text)
     return text
@@ -40,7 +40,7 @@ def import_mapping(path, as_of, *, taxonomy, taxonomy_version):
     observations = []
     for line, row in enumerate(reader, 2):
         code = str(row.get('code') or '').strip()
-        if not re.fullmatch(r'\d{6}', code):
+        if not re.fullmatch(r'[0-9]{6}', code):
             raise ValueError(f'line {line}: code must contain six digits')
         observed = iso_day(row.get('observed_date') or '')
         if observed > cutoff:
@@ -94,7 +94,8 @@ def main():
         parser.error('input and output must differ')
     result = import_mapping(args.input, args.as_of, taxonomy=args.taxonomy, taxonomy_version=args.taxonomy_version)
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False) + '\n', encoding='utf-8')
+    with args.output.open('x',encoding='utf-8') as stream:
+        stream.write(json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False) + '\n')
     print(json.dumps(result['metadata'], ensure_ascii=False))
 
 

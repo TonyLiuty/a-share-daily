@@ -48,7 +48,7 @@ def load_history(daily_directory, as_of):
 
 
 def build_mapping(observations, as_of):
-    """Latest dated valid local observation per code; same-date conflicts stay unknown."""
+    """Latest dated observation per code; unknown/latest conflicts invalidate old labels."""
     as_of = _day(as_of)
     latest = {}
     for row in _records(observations):
@@ -57,12 +57,12 @@ def build_mapping(observations, as_of):
         code = raw_code.zfill(6)
         label = str(row.get('sw_industry') or '').strip()
         primary = primary_industry(label)
-        if observed > as_of or not re.fullmatch(r'\d{1,6}', raw_code) or not primary:
+        if observed > as_of or not re.fullmatch(r'[0-9]{1,6}', raw_code):
             continue
         entry = {'code': code, 'sw_industry': label, 'primary_industry': primary,
                  'industry_taxonomy': '申万', 'industry_level': '一级',
                  'mapping_date': observed, 'mapping_source': str(row.get('source') or 'local_saved_candidates'),
-                 'mapping_status': 'mapped'}
+                 'mapping_status': 'mapped' if primary else 'unmapped'}
         prior = latest.get(code)
         if prior is None or observed > prior['mapping_date']:
             latest[code] = entry

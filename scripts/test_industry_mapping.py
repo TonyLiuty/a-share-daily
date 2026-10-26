@@ -8,6 +8,22 @@ def observation(code, day, label):
 
 
 class IndustryMappingTests(unittest.TestCase):
+    def test_unicode_codes_are_not_valid_security_identifiers(self):
+        self.assertEqual(build_mapping([observation('０００００１','2026-10-19','银行')],'2026-10-19'),{})
+
+    def test_latest_invalid_does_not_restore_old_label(self):
+        for label in ('', '未分类', '国有大型银行'):
+            mapping=build_mapping([observation('1','2026-10-18','银行'),observation('1','2026-10-19',label)],'2026-10-19')
+            self.assertEqual(mapping['000001']['mapping_status'],'unmapped')
+            self.assertIsNone(mapping['000001']['primary_industry'])
+
+    def test_same_day_unknown_and_known_conflict_in_any_order(self):
+        rows=[observation('1','2026-10-19',''),observation('1','2026-10-19','银行')]
+        for observations in (rows,list(reversed(rows))):
+            mapping=build_mapping(observations,'2026-10-19')
+            self.assertEqual(mapping['000001']['mapping_status'],'conflicting_same_date')
+            self.assertIsNone(mapping['000001']['primary_industry'])
+
     def test_future_observation_cannot_fill_past(self):
         mapping = build_mapping([observation('1', '2026-10-20', '银行 — 国有大型银行')], '2026-10-19')
         self.assertEqual(mapping, {})
