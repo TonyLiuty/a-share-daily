@@ -1,0 +1,5 @@
+# Versions verified in the original runtime. Python 3.12+ recommended.
+numpy==2.5.1
+pandas==3.0.5
+requests==2.34.2
+tzdata==2026.3

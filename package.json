@@ -1,0 +1,6 @@
+{
+  "name": "a-share-daily-browser-checks",
+  "private": true,
+  "scripts": {"test:ui": "node scripts/check_ui.cjs"},
+  "devDependencies": {"playwright": "1.62.1"}
+}
