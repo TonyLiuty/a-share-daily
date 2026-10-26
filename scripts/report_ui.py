@@ -48,6 +48,13 @@ def industry_watchlist(pickrows, context):
     if len(pickrows) < 2:
         return '<p class="source-note">观察池行业标注暂缺。</p>'
     grouped = {}
+    briefs = {str(item.get('code', '')).zfill(6): item for item in (context or {}).get('stock_briefs', [])}
+    headers = pickrows[0]
+    def short(value, limit, fallback):
+        text = re.sub(r'\s+', ' ', str(value or '')).strip()
+        if text.lower() in ('', 'nan', 'none', 'null', '—', '--'):
+            return fallback
+        return text if len(text) <= limit else text[:limit-1].rstrip()+'…'
     for row in pickrows[1:]:
         if len(row) < 4:
             continue
@@ -56,15 +63,24 @@ def industry_watchlist(pickrows, context):
         code = row[1].strip()
         score = row[4].strip() if len(row) > 4 else '—'
         rank = row[0].strip()
-        grouped.setdefault(industry, []).append((name, code, score, rank))
+        brief = briefs.get(code.zfill(6), {})
+        values = dict(zip(headers,row))
+        price_notes = [key+' '+values[key] for key in ('20日涨跌','60日涨跌') if values.get(key) not in (None,'','—','--')]
+        business = short(brief.get('business'),72,'主营资料暂缺')
+        drivers = short(brief.get('drivers'),56,'因子明细暂缺')
+        risk = short(brief.get('risk'),88,'；'.join(price_notes) or '风险数据暂缺')
+        grouped.setdefault(industry, []).append((name, code, score, rank, business, drivers, risk))
     if not grouped:
         return '<p class="source-note">观察池行业标注暂缺。</p>'
     cards = []
     for industry, stocks in sorted(grouped.items(), key=lambda item: (-len(item[1]), item[0])):
         # Feed board names and company classifications are separate taxonomies.
         # A coincidentally equal name is not evidence of equal constituents.
-        members = '、'.join(f'<a class="stock-link industry-stock-link" href="#stock-{esc(rank)}">{esc(name)}</a>（{esc(code)}，{esc(score)}分）' if rank.isdigit() else f'{esc(name)}（{esc(code)}，{esc(score)}分）' for name, code, score, rank in stocks)
-        cards.append(f'<div class="industry-watch"><div><b>{esc(industry)}</b><small>{len(stocks)} 只观察股</small></div><p>{members}</p></div>')
+        members = []
+        for name, code, score, rank, business, drivers, risk in stocks:
+            heading = f'<a class="stock-link industry-stock-link" href="#stock-{esc(rank)}">{esc(name)}</a>' if rank.isdigit() else esc(name)
+            members.append(f'<article class="industry-company"><div class="company-heading">{heading}<span>{esc(code)} · 综合分 {esc(score)}</span></div><p class="company-business"><span>主营</span>{esc(business)}</p><div class="company-facts"><p><span>得分强项</span>{esc(drivers)}</p><p><span>风险数据</span>{esc(risk)}</p></div></article>')
+        cards.append(f'<div class="industry-watch"><div><b>{esc(industry)}</b><small>{len(stocks)} 只观察股</small></div><div class="industry-companies">'+''.join(members)+'</div></div>')
     return '<div class="industry-watchlist"><h3>行业与标的对应</h3><p class="muted">按公司行业字段分组。行情板块分类另列，不将同名板块涨跌套用到公司行业。</p>'+''.join(cards)+'</div>'
 
 

@@ -40,7 +40,36 @@ class IndustryViewTests(unittest.TestCase):
         page = industry_watchlist(picks, context)
         self.assertNotIn('9.99', page)
         self.assertIn('href="#stock-2"', page)
-        self.assertIn('测试银行</a>（000001，81分）', page)
+        self.assertIn('测试银行</a>', page)
+        self.assertIn('000001 · 综合分 81', page)
+
+    def test_company_summary_uses_own_code_and_short_text(self):
+        picks = [['排名','代码','名称','行业','分数'],['1','000001','甲公司','电子','80'],['2','000002','乙公司','电子','79']]
+        page = industry_watchlist(picks,{'stock_briefs':[
+            {'code':'000002','business':'乙的业务','drivers':'量价 90','risk':'60日回撤-9%'},
+            {'code':'000001','business':'甲'*100,'drivers':'趋势 95','risk':'20日涨幅+4%；60日回撤-5%'}]})
+        self.assertEqual(page.count('class="industry-company"'),2)
+        first=page.split('class="industry-company"')[1]
+        self.assertIn('趋势 95',first)
+        self.assertNotIn('乙的业务',first)
+        self.assertIn('甲'*71+'…',first)
+        self.assertNotIn('甲'*72,first)
+        self.assertIn('20日涨幅+4%；60日回撤-5%',first)
+
+    def test_missing_company_summary_uses_only_recorded_price_fields(self):
+        picks = [['排名','代码','名称','行业','分数','20日涨跌','60日涨跌'],['1','000001','甲','银行','80','+3.1%','—']]
+        page = industry_watchlist(picks,None)
+        self.assertIn('主营资料暂缺',page)
+        self.assertIn('因子明细暂缺',page)
+        self.assertIn('20日涨跌 +3.1%',page)
+        self.assertNotIn('60日涨跌',page)
+
+    def test_company_summary_escapes_untrusted_text(self):
+        picks = [['排名','代码','名称','行业','分数'],['1','000001','甲','银行','80']]
+        page = industry_watchlist(picks,{'stock_briefs':[{'code':'000001','business':'<img src=x>','drivers':'A&B','risk':'<script>x</script>'}]})
+        self.assertIn('&lt;img src=x&gt;',page)
+        self.assertIn('A&amp;B',page)
+        self.assertNotIn('<script>',page)
 
     def test_missing_industry_is_visible_and_names_are_escaped(self):
         page = industry_watchlist([['排名','代码','名称','行业','分数'], ['1','000001','A<B','','—']], None)
