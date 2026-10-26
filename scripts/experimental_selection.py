@@ -4,9 +4,9 @@ import hashlib
 import json
 import re
 from datetime import date, timedelta
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from industry_mapping import load_history, build_mapping, attach_mapping, select_by_primary, primary_industry
-from import_industry_mapping import iso_day
+from import_industry_mapping import iso_day, import_mapping
 
 VERSION = '1.1.0'
 
@@ -39,7 +39,25 @@ def load_master(path):
             raise ValueError('mapped primary industry disagrees with explicit SW label')
         if item['mapping_status']!='mapped' and item.get('primary_industry') is not None:
             raise ValueError('unknown/conflicting mapping must not provide primary industry')
-    return mapping,dict(meta,artifact_sha256=hashlib.sha256(content).hexdigest())
+    source_name=meta.get('source_file')
+    if not isinstance(source_name,str) or not source_name:
+        raise ValueError('industry master requires archived source CSV')
+    # Prefer the adjacent original when the archive has been moved as a pair.
+    # A changed adjacent copy must fail instead of silently using another file.
+    basename=PureWindowsPath(source_name).name if '\\' in source_name else Path(source_name).name
+    adjacent=Path(path).resolve().parent/basename
+    source=adjacent if adjacent.exists() else Path(source_name)
+    if not source.is_file():raise ValueError('archived industry source CSV is unavailable')
+    actual=hashlib.sha256(source.read_bytes()).hexdigest()
+    if actual!=meta['file_sha256']:raise ValueError('archived industry source CSV hash mismatch')
+    rebuilt=import_mapping(source,meta['cutoff'],taxonomy='sw',taxonomy_version='2021')
+    if mapping!=rebuilt['mapping'] or payload.get('observations')!=rebuilt['observations']:
+        raise ValueError('industry master mapping or observations disagree with archived CSV')
+    for field in ('record_count','security_count','mapped_count','coverage','mapping_date','source'):
+        if meta.get(field)!=rebuilt['metadata'].get(field):
+            raise ValueError(f'industry master metadata {field} disagrees with archived CSV')
+    return mapping,dict(meta,artifact_sha256=hashlib.sha256(content).hexdigest(),
+                        source_verified=True,resolved_source_file=str(source.resolve()))
 
 
 def prepare_policy(config, output, requested=None, history=None, master=None):
