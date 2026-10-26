@@ -84,9 +84,13 @@ python scripts/evaluate_research.py --signals ./quant-agent-output/state/signals
 
 按1/5/20日分别报告完整信号日、成熟观测和配对超额。一个信号日只有CSV中全部股票收益成熟才参与组合均值；额外往返成本5/10个基点单独列出。多日重叠窗口不复利为净值，结果不用于自动调参。当前验收记录见 [迭代基准](docs/2026-10-26-迭代基准.md)。
 
+评估输入要求有效的`YYYY-MM-DD`日期和六位ASCII数字股票代码，不自动补零修复。不同策略版本或部分缺失版本须分开评估；全部缺失版本的旧文件会标记版本未知。[输入校验记录](docs/2026-10-26-评估输入校验.md)保存270条真实信号的前后逐值对照。
+
 ## 实验性申万一级行业约束
 
 批量取得官方行业资料：`python scripts/fetch_industry_master.py --transport curl --output ./quant-agent-output/research/industry-master`。先安装`requirements-mapping.txt`。每次保存31张原件、文件hash和实际采集时间，导入JSON可通过`--industry-master`替代历史候选资料。冲突保持未知，当前分类仅供取得日期之后的前瞻实验。[采集基准](docs/2026-10-26-官方行业表采集基准.md)记录5,275个代码和现有覆盖缺口；尚不能据此声称策略稳定盈利。
+
+原始CSV与导入JSON需一并保留。实验加载会重新核验CSV的SHA-256，并比较重新计算的映射、观测与计数；只有JSON内部hash一致仍不能通过。`audit_industry_master.py`另列资料全体及行情样本中的待核对代码、名称、冲突标签、日期和原始来源，不用猜测分类消除缺口。
 
 旧版默认仍为1.0.0。可选 `--industry-policy sw-primary --industry-history ./quant-agent-output/daily --output ./experiment-output` 启用1.1.0实验策略，使用信号日之前已经保存的公司资料映射到申万一级行业，每行业最多2只。实验输出必须与资料来源输出分开，已有旧版信号会阻止混用。映射不能覆盖全部可评分股票或不足10只时返回 `data_error`，保留诊断，不追加实验信号。当前仅有历史候选资料，覆盖不足仍是待解决问题。
 
