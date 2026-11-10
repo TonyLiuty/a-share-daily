@@ -17,12 +17,13 @@ def search_direction(title, event_time=''):
     the change in the same quote, avoiding inference from an arbitrary threshold.
     """
     query = f'"{title}" 较上一交易日'
-    try:
-        response = requests.get('https://www.google.com/search', params={'q': query},
-                                headers={'User-Agent': 'Mozilla/5.0'}, timeout=4)
-        text = html.unescape(re.sub(r'<[^>]+>', ' ', response.text))
-    except requests.RequestException:
-        return None
+    text = ''
+    for endpoint in ('https://www.google.com/search', 'https://www.bing.com/search'):
+        try:
+            response = requests.get(endpoint, params={'q': query}, headers={'User-Agent': 'Mozilla/5.0'}, timeout=4)
+            text += ' ' + html.unescape(re.sub(r'<[^>]+>', ' ', response.text))
+        except requests.RequestException:
+            continue
     match = re.search(r'较上一交易日(?:收盘价)?(?:上涨|上升|升值|调升)(\d+(?:\.\d+)?)\s*个?基点', text)
     if match:
         return ('人民币升值', f'搜索到同一收盘价较上一交易日升值{match.group(1)}个基点；人民币走强通常利好航空、造纸等进口成本敏感行业，压低出口企业的汇兑优势。')
