@@ -174,7 +174,7 @@ def render(md, title, legacy, context=None):
 <section id="archive"><h2>逐股收益与历史记录</h2><details class="support"><summary>今日涨跌、1万元示例与逐股收益</summary><div class="detail-body">{fragment(legacy,'六、逐股收益跟踪')}</div></details><details class="support"><summary>历史全部股票与信号日</summary><div class="detail-body">{fragment(legacy,'七、历史信号股票池收益统计')}</div></details></section>
 <section id="quality"><h2>数据与阅读口径</h2><p>{esc(overview.get('数据是否完整',''))}</p><details class="support"><summary>数据来源、降级与限制</summary><div class="detail-body">{quality}</div></details><details class="support"><summary>指标解释</summary><div class="detail-body">{glossary}</div></details>{links}<p class="muted">研究观察池，非实际持仓。示例盈亏与理论收益均不代表实盘收益。页面版本 2.0。</p></section>'''
     sections = sections.replace('<div class="indices">', insights['three']+'<div class="indices">', 1)
-    sections = sections.replace('<section id="industries">', insights['changes']+'<section id="industries">', 1)
+    sections = sections.replace('<section id="watchlist">', insights['changes']+'<section id="watchlist">', 1)
     sections = sections.replace('<details class="support"><summary>展开行业', insights['industries']+'<details class="support"><summary>展开行业', 1)
     sections = sections.replace('<section id="watchlist">', '<section class="audit-section">'+insights['audit']+'</section><section id="watchlist">', 1) if context else sections
     sections = sections.replace('<section id="archive">', '<section class="history-section">'+insights['history']+'</section><section id="archive">', 1) if context else sections
