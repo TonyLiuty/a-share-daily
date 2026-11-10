@@ -151,7 +151,7 @@ def render(context):
     for title,a in audit.items():
         status={'retrieved':'已读匹配详情','needs_review':'页面匹配待审','unavailable':'未取得正文'}.get(a.get('status'),'未核验')
         audits.append([title,status,a.get('claim_status','待核验'),a.get('error') or a.get('note',''),a.get('retrieved_at','')])
-    audit_html='<details class="support"><summary>消息原文读取与核验记录</summary>'+grid(['消息','读取状态','事实核验','限制','核验时间'],audits)+'<p>来源读取成功不等于事实核验通过；官方预测也不是已发生事实。新闻事件发生时间未提供时保留未知。</p></details>'
+    audit_html='<details class="support"><summary>消息原文读取记录</summary>'+grid(['消息','正文读取状态','原文链接与限制','读取时间'],[[row[0],row[1],row[3]+'；[查看原文]('+next((a.get('url','') for title,a in audit.items() if title==row[0]),'' )+')',row[4]] for row in audits])+'<p>这里记录是否读到正文、原文链接和读取限制；原文读取不等于事件影响已经被市场验证。</p></details>'
     change_html=change_html.replace('较上次发生了什么','与上一报告日相比').replace('新增/退出只表示规则排名变化，不能等同买入/卖出。','名单按评分更新，不是交易记录。').replace('固定样本比较待积累：旧报告未保留完整行情快照，不能用十只候选代替全体样本。下一次成功取数开始固定成员并逐日记录覆盖率。','旧报告未保存完整行情，暂时无法比较同一批股票的表现。后续日报将保留快照。')
     ind=ind.replace('行业持续性：1 / 5 / 20日与扩散程度','查看行业1 / 5 / 20日涨跌幅')
     history=history.replace('今日新信号与此前已成熟信号分开看','查看这些股票此前入选后的收益').replace('今天新生成的信号尚未建仓。下表展示此前已成熟记录，收益后附原始信号日期。','今日信号从下一交易日开盘起计算理论收益。下表列出此前已走完观察期的记录。')
